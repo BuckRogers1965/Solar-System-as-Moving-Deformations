@@ -1,0 +1,256 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>Solar System as Moving Deformations</title>
+<style>
+:root{--bg:#fff;--fg:#1a1a1a;--mut:#666;--bd:#ddd;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#111;--fg:#eee;--mut:#999;--bd:#333}}
+:root[data-theme="dark"]{--bg:#111;--fg:#eee;--mut:#999;--bd:#333}
+html,body{margin:0;background:var(--bg);color:var(--fg);font-family:system-ui,-apple-system,Segoe UI,sans-serif}
+body{padding:12px;max-width:760px;margin:0 auto}
+h1{font-size:18px;margin:0 0 8px}
+canvas{width:100%;aspect-ratio:1;border:1px solid var(--bd);border-radius:6px;display:block}
+.ctl{display:flex;gap:14px;flex-wrap:wrap;align-items:center;margin:10px 0;font-size:13px}
+.ctl label{display:flex;gap:6px;align-items:center}
+button,select{background:var(--bg);color:var(--fg);border:1px solid var(--bd);border-radius:6px;padding:6px 12px}
+pre{font-size:11.5px;color:var(--mut);white-space:pre-wrap;overflow-x:auto;margin:6px 0}
+article{margin:28px 0 40px;border-top:1px solid var(--bd);padding-top:18px;font-size:15px;line-height:1.6}
+article h2{font-size:21px;margin:0 0 4px}article h3{font-size:16px;margin:22px 0 6px}
+article .by{color:var(--mut);font-size:13px;margin:0 0 14px}article p,article li{margin:8px 0}
+article .tw{overflow-x:auto}article table{border-collapse:collapse;width:100%;font-size:13.5px;line-height:1.45}
+article th,article td{border:1px solid var(--bd);padding:6px 8px;text-align:left;vertical-align:top}
+article .rule{border-left:3px solid var(--mut);padding:2px 12px;margin:12px 0}
+.ref{border-left:3px solid var(--bd);padding:2px 12px;margin:12px 0}article .ref p{margin:4px 0}article .cite{color:var(--mut);font-size:13px}article .grp{font-weight:600;margin:18px 0 2px}
+</style></head><body>
+<h1>Solar system as moving deformations</h1>
+<canvas id="c" width="720" height="720"></canvas>
+<div class="ctl">
+<label>View from <select id="fm"></select></label>
+<label>Trail <input id="tf" type="range" min="10" max="150" value="100"><span id="tv"></span></label>
+<label>Speed <input id="spd" type="range" min="0" max="100" value="62"><span id="sv"></span></label>
+<label>View radius <input id="zm" type="range" min="0" max="100" value="33"><span id="zv"></span></label>
+<label>Outside depth <input id="amp" type="range" min="0" max="12" value="0"><span id="av"></span></label>
+<button id="pp">Pause</button><button id="rs">Reset</button>
+</div>
+<div class="ctl" id="gs"></div>
+<pre id="tb"></pre>
+<script>
+const KPC=2.06264806e8,KMS=0.210945,TAU=Math.PI*2,R=Math.PI/180,SUN_DEPTH=4*Math.PI*Math.PI,EPS=1e-12,EARTH_M=3.003e-6,MOON_M=3.694e-8;
+// planets at J2000: name, mass, a, e, inclination, mean longitude, longitude of perihelion, node, pixel size, colour
+const PL=[['Mercury',1.66e-7,.38709927,.20563593,7.00497902,252.2503235,77.45779628,48.33076593,2,'#9a9a9a'],['Venus',2.45e-6,.72333566,.00677672,3.39467605,181.9790995,131.60246718,76.67984255,3,'#e0b070'],['Earth',EARTH_M,1.00000261,.01671123,-.00001531,100.46457166,102.93768193,0,3,'#3b82f6'],['Mars',3.23e-7,1.52371034,.0933941,1.84969142,-4.55343205,-23.94362959,49.55953891,2.5,'#e5533d'],['Jupiter',9.546e-4,5.202887,.04838624,1.30439695,34.39644051,14.72847983,100.47390909,6,'#d9a066'],['Saturn',2.858e-4,9.53667594,.05386179,2.48599187,49.95424423,92.59887831,113.66242448,5.5,'#e8d08a'],['Uranus',4.366e-5,19.18916464,.04725744,.77263783,313.23810451,170.9542763,74.01692503,4,'#7fd6e0'],['Neptune',5.15e-5,30.06992276,.00859048,1.77004347,-55.12002969,44.96476227,131.78422574,4,'#4a6cf0'],['Pluto',6.6e-9,39.48211675,.2488273,17.14001206,238.92903833,224.06891629,110.30393684,1.8,'#b08968']];
+const AS=[['Ceres',4.7e-10,2.77,.076,10.6],['Vesta',1.3e-10,2.36,.089,7.14],['Pallas',1.07e-10,2.77,.231,34.8],['Hygiea',4.5e-11,3.14,.117,3.84],['Interamnia',3.3e-11,3.06,.155,17.3],['Europa',2.6e-11,3.10,.10,7.48],['Davida',2.9e-11,3.17,.186,15.9],['Sylvia',1.5e-11,3.49,.08,10.9],['Eunomia',2.5e-11,2.64,.186,11.7],['Juno',1e-11,2.67,.257,13],['Psyche',6e-12,2.92,.134,3.1],['Euphrosyne',6e-12,3.15,.226,26.3]];
+const CM=[['Oort comet A',.9,25000,150,40],['Oort comet B',2.4,40000,180,130]];
+// outside deformations: group, profile (0 compact, 1 extended), size, distance kpc, galactic l,b
+const OUT=[{g:0,sh:1,v:230,d:8.2,l:0,b:0},{g:1,sh:0,M:1.5e12,d:780,l:121.2,b:-21.6,fall:110},
+{g:2,sh:0,M:1.4e11,d:50,l:280.5,b:-32.9},{g:2,sh:0,M:3e11,d:840,l:133.6,b:-31.3},
+{g:3,sh:0,M:1.2e15,d:16500,l:283.8,b:74.5},{g:3,sh:0,M:5e16,d:75000,l:307,b:9}];
+const GN=['Milky Way center','Andromeda','Local Group','Supergroup'],GC=['#e8590c','#7048e8','#2b9348','#1c7ed6'],on=[1,1,1,1];
+// everything below is in the ecliptic frame; the outside structures are placed from galactic coordinates
+const ce=Math.cos(23.4392911*R),se=Math.sin(23.4392911*R);
+const MG=[[-.0548755604,-.8734370902,-.4838350155],[.4941094279,-.44482963,.7469822445],[-.867666149,-.1980763734,.4559837762]];
+const E2G=MG.map(r=>[r[0],r[1]*ce+r[2]*se,-r[1]*se+r[2]*ce]);
+const toEc=v=>[0,1,2].map(j=>E2G[0][j]*v[0]+E2G[1][j]*v[1]+E2G[2][j]*v[2]);
+const V0=toEc([11.1*KMS,242.24*KMS,7.25*KMS]);
+// major moons: host, name, mass (solar), a km, e, inclination to the host's equator (the Moon: to the ecliptic)
+const MOONS=[['Earth','Moon',3.694e-8,384400,.0549,5.145],['Jupiter','Io',4.492e-8,421800,.0041,.04],['Jupiter','Europa',2.413e-8,671100,.0094,.47],['Jupiter','Ganymede',7.452e-8,1070400,.0013,.2],['Jupiter','Callisto',5.411e-8,1882700,.0074,.19],
+['Saturn','Mimas',1.885e-11,185540,.0196,1.57],['Saturn','Enceladus',5.43e-11,238040,.0047,.01],['Saturn','Tethys',3.105e-10,294670,.0001,1.09],['Saturn','Dione',5.51e-10,377420,.0022,.02],['Saturn','Rhea',1.16e-9,527070,.001,.35],['Saturn','Titan',6.765e-8,1221870,.0288,.33],['Saturn','Iapetus',9.08e-10,3560840,.0286,15.47],
+['Uranus','Miranda',3.22e-11,129900,.0013,4.34],['Uranus','Ariel',6.29e-10,190900,.0012,.04],['Uranus','Umbriel',6.41e-10,266000,.0039,.13],['Uranus','Titania',1.71e-9,436300,.0011,.08],['Uranus','Oberon',1.547e-9,583500,.0014,.07],
+['Mars','Phobos',5.36e-15,9376,.0151,1.08],['Mars','Deimos',7.42e-16,23463,.00033,1.79],['Neptune','Triton',1.076e-8,354760,.00002,156.865],['Pluto','Charon',7.98e-10,19596,.0002,0]];
+const POLE={Mars:[317.681,52.887],Jupiter:[268.057,64.495],Saturn:[40.589,83.537],Uranus:[257.311,-15.175],Neptune:[299.36,43.46],Pluto:[132.993,-6.163]};
+const DT0=5e-4,KM=1.495978707e8,FN=['Sun','Mercury','Venus','Earth','Mars','Jupiter','Saturn','Uranus','Neptune','Pluto'],FV=[60,1.2,2,.004,.0002,.015,.026,.0045,.003,.00016];
+let N,NL,x,y,z,vx,vy,vz,ax,ay,az,depth,shape,grp,nm,px,col,kind,tr,iv,tl,WX,WY,WZ,WVx,WVy,WVz,MT,B0=[0,0,0],amp=1,moons=true,edge=false,tf=1,dt=5e-4,CAP=16,fi=0,MI=[],host,lvl,ivt,nxt,Sx,Sy,Sz,Svx,Svy,Svz,Sax,Say,Saz,rate=.5,view=60,run=true,steps=0,yrs=0,acc_=0,last=0,fr=0,sd=7;
+const o=[0,0,0],sr=[0,0,0],rnd=()=>(sd=(sd*1664525+1013904223)>>>0)/4294967296;
+// the landscape: the only place the combined geometry exists. Objects ask it which way is downhill at a coordinate.
+const land={downhill(qx,qy,qz,skip,out,only){let sx=0,sy=0,sz=0;
+for(let j=0;j<N;j++){if(j===skip)continue;const g=grp[j];if(g>=0&&!on[g])continue;
+if(only===-2){if(g>=0)continue}else if(only>=0&&g!==only)continue;
+const dx=x[j]-qx,dy=y[j]-qy,dz=z[j]-qz,r2=dx*dx+dy*dy+dz*dz+EPS;let w=depth[j]*(g>=0?amp:1);
+w=shape[j]?w/r2:w/(r2*Math.sqrt(r2));sx+=dx*w;sy+=dy*w;sz+=dz*w}
+out[0]=sx;out[1]=sy;out[2]=sz}};
+// starting coordinates and speeds from orbital elements (an ellipse with its tilt, node and perihelion direction)
+function kep(a,e,I,Om,w,nu,mu){I*=R;Om*=R;w*=R;const p=a*(1-e*e),r=p/(1+e*Math.cos(nu)),f=Math.sqrt(mu/p),
+X=r*Math.cos(nu),Y=r*Math.sin(nu),U=-f*Math.sin(nu),V=f*(e+Math.cos(nu)),cO=Math.cos(Om),sO=Math.sin(Om),cw=Math.cos(w),sw=Math.sin(w),ci=Math.cos(I),si=Math.sin(I),
+a11=cO*cw-sO*sw*ci,a12=-cO*sw-sO*cw*ci,a21=sO*cw+cO*sw*ci,a22=-sO*sw+cO*cw*ci,a31=sw*si,a32=cw*si;
+return{x:a11*X+a12*Y,y:a21*X+a22*Y,z:a31*X+a32*Y,vx:a11*U+a12*V,vy:a21*U+a22*V,vz:a31*U+a32*V}}
+function nuFromM(M,e){M=((M%TAU)+TAU)%TAU;let E=M+e*Math.sin(M);for(let k=0;k<30;k++)E-=(E-e*Math.sin(E)-M)/(1-e*Math.cos(E));return 2*Math.atan2(Math.sqrt(1+e)*Math.sin(E/2),Math.sqrt(1-e)*Math.cos(E/2))}
+// a host planet's equator frame in ecliptic coordinates (node direction, third axis, pole)
+function poleFrame(ra,dec){ra*=R;dec*=R;const p=[Math.cos(dec)*Math.cos(ra),Math.cos(dec)*Math.sin(ra),Math.sin(dec)],xh=[-Math.sin(ra),Math.cos(ra),0],yh=[p[1]*xh[2]-p[2]*xh[1],p[2]*xh[0]-p[0]*xh[2],p[0]*xh[1]-p[1]*xh[0]],ec=v=>[v[0],v[1]*ce+v[2]*se,-v[1]*se+v[2]*ce];return[ec(xh),ec(yh),ec(p)]}
+function init(){sd=7;dt=DT0;CAP=moons?16:400;
+const B=[{n:'Sun',dep:SUN_DEPTH,x:0,y:0,z:0,vx:0,vy:0,vz:0,p:7,c:'#f5b700',k:0,a:0}],MB=[],mm={};
+if(moons)MOONS.forEach(m=>(mm[m[0]]=mm[m[0]]||[]).push(m));
+for(const[n,m,a,e,I,L,wb,Om,p,c]of PL){const ms=mm[n]||[],Mt=m+ms.reduce((q,k)=>q+k[2],0),h={n,dep:SUN_DEPTH*m,...kep(a,e,I,Om,wb-Om,nuFromM((L-wb)*R,e),SUN_DEPTH*(1+Mt)),p,c,k:1,a,e},hi=B.length,fr=POLE[n]?poleFrame(...POLE[n]):null;B.push(h);
+const rel=ms.map(k=>{const aa=k[3]/KM,mu=SUN_DEPTH*(m+k[2]);let st;
+if(n==='Earth')st=kep(aa,k[4],k[5],125.0445,318.3085,nuFromM(134.9634*R,k[4]),mu);
+else{const s0=kep(aa,k[4],k[5],0,rnd()*360,nuFromM(rnd()*TAU,k[4]),mu);st={};['x','y','z'].forEach((q,j)=>st[q]=s0.x*fr[0][j]+s0.y*fr[1][j]+s0.z*fr[2][j]);['vx','vy','vz'].forEach((q,j)=>st[q]=s0.vx*fr[0][j]+s0.vy*fr[1][j]+s0.vz*fr[2][j])}
+return{k,st,aa,mu}});
+for(const q of['x','y','z','vx','vy','vz'])h[q]-=rel.reduce((t,r)=>t+r.st[q]*r.k[2]/Mt,0);
+for(const r of rel){const T=TAU*Math.sqrt(r.aa**3/r.mu);let lv=1;while(lv<64&&lv<160*dt/T)lv*=2;
+MB.push({n:r.k[1],dep:SUN_DEPTH*r.k[2],x:h.x+r.st.x,y:h.y+r.st.y,z:h.z+r.st.z,vx:h.vx+r.st.vx,vy:h.vy+r.st.vy,vz:h.vz+r.st.vz,p:1.5,c:'#cfd4dc',k:5,a:r.aa,host:hi,lv:lv,T})}}
+B.push(...MB);
+for(const[n,m,a,e,I]of AS)B.push({n,dep:SUN_DEPTH*m,...kep(a,e,I,rnd()*360,rnd()*360,nuFromM(rnd()*TAU,e),SUN_DEPTH),p:1.5,c:'#888',k:2,a});
+for(const[n,q,a,r0,I]of CM){const e=1-q/a,nu=-Math.acos((q*(1+e)/r0-1)/e);B.push({n,dep:SUN_DEPTH*1e-16,...kep(a,e,I,rnd()*360,rnd()*360,nu,SUN_DEPTH),p:2.5,c:'#3bc9db',k:3,a:0})}
+NL=B.length;let P=[0,0,0];MT=0;B.forEach(b=>{MT+=b.dep;P[0]+=b.dep*b.vx;P[1]+=b.dep*b.vy;P[2]+=b.dep*b.vz});const sv=[0,1,2].map(k=>V0[k]-P[k]/MT);
+const S=OUT.map(s=>{const D=s.d*KPC,r=Math.PI/180;return toEc([D*Math.cos(s.l*r)*Math.cos(s.b*r),D*Math.sin(s.l*r)*Math.cos(s.b*r),D*Math.sin(s.b*r)])});
+OUT.forEach((s,i)=>{let v=[0,0,0];if(s.fall){const d=[0,1,2].map(k=>S[0][k]-S[i][k]),L=Math.hypot(...d);v=d.map(q=>q/L*s.fall*KMS)}
+B.push({n:'',dep:s.sh?(s.v*KMS)**2:SUN_DEPTH*s.M,x:S[i][0],y:S[i][1],z:S[i][2],vx:v[0]-sv[0],vy:v[1]-sv[1],vz:v[2]-sv[2],sh:s.sh,g:s.g,k:4})});
+N=B.length;[x,y,z,vx,vy,vz,ax,ay,az,depth]=Array.from({length:10},()=>new Float64Array(N));[Sx,Sy,Sz,Svx,Svy,Svz,Sax,Say,Saz]=Array.from({length:9},()=>new Float64Array(N));
+shape=[];grp=[];nm=[];px=[];col=[];kind=[];iv=[];tl=[];tr=[];host=[];lvl=[];ivt=[];nxt=[];MI=[];
+B.forEach((b,i)=>{nm[i]=b.n;depth[i]=b.dep;x[i]=b.x;y[i]=b.y;z[i]=b.z;vx[i]=b.vx;vy[i]=b.vy;vz[i]=b.vz;shape[i]=b.sh||0;grp[i]=b.k==4?b.g:-1;px[i]=b.p;col[i]=b.c;kind[i]=b.k;
+host[i]=b.k==5?b.host:-1;lvl[i]=b.lv||1;nxt[i]=0;if(b.k==5)MI.push(i);
+if(b.k==1&&b.e!==undefined){const T=Math.pow(b.a,1.5),need=Math.max(4000,24000*Math.sqrt(b.e/.2056));let lv=1;while(lv<128&&lv<need*DT0/T)lv*=2;if(lv>1){host[i]=0;lvl[i]=lv;MI.push(i)}}
+ivt[i]=b.k==5?b.T/100:(b.k==3?Math.round(.02/DT0):Math.max(1,Math.round(Math.pow(b.a||1,1.5)/300/DT0)))*DT0;tl[i]=b.k==3?800:b.k==5?165:480;tr[i]=[]});ivt[0]=40*DT0;tl[0]=6000;
+steps=0;yrs=0;WX=WY=WZ=0;WVx=sv[0];WVy=sv[1];WVz=sv[2];B0=[0,0,0];for(let i=1;i<NL;i++)for(let k=0;k<3;k++)B0[k]+=depth[i]/MT*[x,y,z][k][i];reading()}
+// every object reads the downhill direction at its own coordinates; coordinates are measured from the Sun
+function reading(){land.downhill(0,0,0,0,o,-1);sr[0]=o[0];sr[1]=o[1];sr[2]=o[2];
+for(let i=1;i<N;i++){land.downhill(x[i],y[i],z[i],i,o,-1);ax[i]=o[0]-sr[0];ay[i]=o[1]-sr[1];az[i]=o[2]-sr[2]}}
+// a trail point remembers the body's position and where the nine planets were then, so any viewpoint can redraw it
+function pt(a,b,c,tau){const p=new Float64Array(30);p[0]=a;p[1]=b;p[2]=c;for(let k=1;k<=9;k++){const q=3*k;
+if(tau===undefined){p[q]=x[k];p[q+1]=y[k];p[q+2]=z[k]}else{p[q]=Sx[k]+Svx[k]*tau+.5*Sax[k]*tau*tau;p[q+1]=Sy[k]+Svy[k]*tau+.5*Say[k]*tau*tau;p[q+2]=Sz[k]+Svz[k]*tau+.5*Saz[k]*tau*tau}}return p}
+// reading at a coordinate a time tau into the step: every other object is placed on its start-of-step path
+land.downhillX=function(qx,qy,qz,skip,out,tau){let sx=0,sy=0,sz=0;const t2=.5*tau*tau;
+for(let j=0;j<N;j++){if(j===skip)continue;const g=grp[j];if(g>=0&&!on[g])continue;
+const dx=Sx[j]+Svx[j]*tau+Sax[j]*t2-qx,dy=Sy[j]+Svy[j]*tau+Say[j]*t2-qy,dz=Sz[j]+Svz[j]*tau+Saz[j]*t2-qz,r2=dx*dx+dy*dy+dz*dz+EPS;
+let w=depth[j]*(g>=0?amp:1);w=shape[j]?w/r2:w/(r2*Math.sqrt(r2));sx+=dx*w;sy+=dy*w;sz+=dz*w}
+out[0]=sx;out[1]=sy;out[2]=sz};
+function step(){const H=dt,f=fi;
+WVx+=sr[0]*H/2;WVy+=sr[1]*H/2;WVz+=sr[2]*H/2;
+for(let i=0;i<N;i++){Sx[i]=x[i];Sy[i]=y[i];Sz[i]=z[i];Svx[i]=vx[i];Svy[i]=vy[i];Svz[i]=vz[i];Sax[i]=ax[i];Say[i]=ay[i];Saz[i]=az[i]}
+for(let i=1;i<N;i++)if(host[i]<0){vx[i]+=ax[i]*H/2;vy[i]+=ay[i]*H/2;vz[i]+=az[i]*H/2}
+for(let i=1;i<N;i++)if(host[i]<0){x[i]+=vx[i]*H;y[i]+=vy[i]*H;z[i]+=vz[i]*H}
+WX+=WVx*H;WY+=WVy*H;WZ+=WVz*H;
+const s0=sr[0],s1=sr[1],s2=sr[2];
+for(const m of MI){const n=lvl[m],h=H/n;for(let q=0;q<n;q++){
+vx[m]+=ax[m]*h/2;vy[m]+=ay[m]*h/2;vz[m]+=az[m]*h/2;x[m]+=vx[m]*h;y[m]+=vy[m]*h;z[m]+=vz[m]*h;
+const tau=(q+1)*h;land.downhillX(x[m],y[m],z[m],m,o,tau);ax[m]=o[0]-s0;ay[m]=o[1]-s1;az[m]=o[2]-s2;
+vx[m]+=ax[m]*h/2;vy[m]+=ay[m]*h/2;vz[m]+=az[m]*h/2;
+const tt=yrs+tau;if(tt>=nxt[m]){tr[m].push(pt(x[m],y[m],z[m],tau));if(tr[m].length>tl[m])tr[m].shift();nxt[m]=Math.max(nxt[m]+ivt[m],tt+.5*ivt[m])}}}
+reading();
+for(let i=1;i<N;i++)if(host[i]<0){vx[i]+=ax[i]*H/2;vy[i]+=ay[i]*H/2;vz[i]+=az[i]*H/2}WVx+=sr[0]*H/2;WVy+=sr[1]*H/2;WVz+=sr[2]*H/2;
+steps++;yrs+=H;for(let i=0;i<NL;i++)if(host[i]<0&&yrs>=nxt[i]){tr[i].push(pt(x[i],y[i],z[i]));if(tr[i].length>tl[i])tr[i].shift();nxt[i]=Math.max(nxt[i]+ivt[i],yrs+.5*ivt[i])}}
+function readout(){let bx=WX,by=WY,bz=WZ,bvx=WVx,bvy=WVy,bvz=WVz;for(let i=1;i<NL;i++){const w=depth[i]/MT;bx+=w*x[i];by+=w*y[i];bz+=w*z[i];bvx+=w*vx[i];bvy+=w*vy[i];bvz+=w*vz[i]}
+const dx=bx-B0[0]-V0[0]*yrs,dy=by-B0[1]-V0[1]*yrs,dz=bz-B0[2]-V0[2]*yrs,iN=8,rd=(a,b,c,k,only)=>{land.downhill(a,b,c,k,o,only);return[o[0],o[1],o[2]]},H=v=>Math.hypot(v[0],v[1],v[2]);
+let s='System barycenter in the galactic frame: '+(Math.hypot(bvx,bvy,bvz)/KMS).toFixed(1)+' km/s, '+Math.hypot(dx,dy,dz).toExponential(2)+' AU off a straight line after '+yrs.toFixed(0)+' yr   outside depth ×'+amp.toExponential(0)+'\n';
+s+='Local deformations (Sun, planets, asteroids, comets): slope at Neptune '+H(rd(x[iN],y[iN],z[iN],iN,-2)).toExponential(1)+'\n';
+GN.forEach((n,g)=>{const a=rd(0,0,0,0,g),b=rd(x[iN],y[iN],z[iN],iN,g);
+s+=n.padEnd(18)+' slope at Sun '+H(a).toExponential(1)+'  at Neptune '+H(b).toExponential(1)+'  differs by '+H([b[0]-a[0],b[1]-a[1],b[2]-a[2]]).toExponential(1)+'\n'});
+s+='Every object reads only the downhill direction at its own coordinates. Coordinates are measured from the Sun, so each change is reported relative to the Sun\'s own reading; that reading is what moves the Sun through the galactic frame. Units AU/yr².';
+document.getElementById('tb').textContent=s}
+const fmtV=v=>v<.01?v.toExponential(1):v<100?v.toPrecision(2):v.toExponential(1);
+function draw(){const c=document.getElementById('c'),g=c.getContext('2d'),W=c.width,sc=W/2/view,cs=getComputedStyle(document.documentElement),fg=cs.getPropertyValue('--fg'),mu=cs.getPropertyValue('--mut'),V=edge?z:y,vi=edge?2:1,f=fi;
+g.clearRect(0,0,W,W);g.font='12px sans-serif';
+const fx=x[f],fy=y[f],fz=z[f],fc=[fx,fy,fz];
+for(let i=0;i<NL;i++){const T=tr[i],own=i==f,P=[],m=Math.min(T.length,Math.max(2,Math.ceil(T.length*tf)));
+for(let k=T.length-m;k<T.length;k++){const q=T[k];P.push(own?[q[0]-fc[0],q[vi]-fc[vi]]:[q[0]-(f?q[3*f]:0),q[vi]-(f?q[3*f+vi]:0)])}
+P.push(own?[0,0]:[x[i]-fx,vi==1?y[i]-fy:z[i]-fz]);if(P.length<2)continue;
+g.strokeStyle=col[i];const K=6;for(let c=0;c<K;c++){const a=Math.floor(c*(P.length-1)/K),e=Math.max(a+1,Math.floor((c+1)*(P.length-1)/K));
+g.globalAlpha=.07+.6*(c+1)/K;g.beginPath();for(let k=a;k<=e&&k<P.length;k++){const X=W/2+P[k][0]*sc,Y=W/2-P[k][1]*sc;k==a?g.moveTo(X,Y):g.lineTo(X,Y)}g.stroke()}}
+g.globalAlpha=1;for(let i=0;i<NL;i++){const X=W/2+(x[i]-x[f])*sc,Y=W/2-(V[i]-V[f])*sc;if(X<-20||X>W+20||Y<-20||Y>W+20)continue;g.fillStyle=col[i];g.beginPath();g.arc(X,Y,px[i],0,7);g.fill();
+const dd=Math.hypot(X-W/2,Y-W/2);if((kind[i]==1||kind[i]==3||i==0||(kind[i]==5&&view<.1))&&(i==f||dd>(kind[i]==5?10:22))){g.fillStyle=fg;g.fillText(nm[i],X+px[i]+3,Y-3)}}
+g.fillStyle=mu;g.fillText('year '+(2000+yrs).toFixed(2)+'   viewed from '+FN[f]+'   view radius '+fmtV(view)+' AU'+(edge?'   edge-on':''),10,W-10);
+if(document.getElementById('cp').checked){GN.forEach((n,k)=>{land.downhill(0,0,0,0,o,k);const a=Math.atan2(o[vi],o[0]),ox=50,oy=50;
+g.strokeStyle=GC[k];g.fillStyle=GC[k];g.lineWidth=2;g.beginPath();g.moveTo(ox,oy);g.lineTo(ox+36*Math.cos(a),oy-36*Math.sin(a));g.stroke();g.fillText(n.split(' ')[0],ox+40*Math.cos(a)-8,oy-40*Math.sin(a)+4)});g.lineWidth=1}}
+function frame(ts){const d=Math.min((ts-last)/1000||0,.05);last=ts;
+if(run){let rem=Math.min(rate*d,CAP*DT0);while(rem>1e-12){dt=Math.min(DT0,rem);step();rem-=dt}}draw();if(++fr%20==0)readout();requestAnimationFrame(frame)}
+const $=id=>document.getElementById(id);
+function spd(){rate=Math.pow(10,-3+4.301*$('spd').value/100);const mx=CAP*60*DT0;$('sv').textContent=(rate<.1?rate.toPrecision(2):rate.toFixed(2))+' yr/s'+(rate>mx?' (capped at '+mx.toFixed(1)+')':'')}
+function zm(){view=Math.pow(10,-4+8.8*$('zm').value/100);$('zv').textContent=fmtV(view)+' AU'}
+function setView(v){$('zm').value=(Math.log10(v)+4)/8.8*100;zm()}
+function ap(){amp=Math.pow(10,+$('amp').value);$('av').textContent='×1e'+$('amp').value;reading();readout()}
+$('fm').innerHTML=FN.map((n,i)=>'<option value="'+i+'">'+n+'</option>').join('');
+$('fm').onchange=e=>{fi=+e.target.value;setView(FV[fi])};
+$('gs').innerHTML=GN.map((n,k)=>'<label style="color:'+GC[k]+'"><input type="checkbox" checked data-g="'+k+'">'+n+'</label>').join('')+'<label><input type="checkbox" id="cp">Show downhill directions at the Sun</label><label><input type="checkbox" id="mn" checked>Moons (small internal steps)</label><label><input type="checkbox" id="ev">Edge-on view</label>';
+$('gs').onchange=e=>{if(e.target.dataset.g!=null){on[+e.target.dataset.g]=e.target.checked?1:0;reading();readout()}};
+$('mn').onchange=e=>{moons=e.target.checked;init();ap();spd()};$('ev').onchange=e=>{edge=e.target.checked};
+$('tf').oninput=()=>{tf=$('tf').value/100;$('tv').textContent=$('tf').value+'%'};$('tv').textContent='100%';$('spd').oninput=spd;$('zm').oninput=zm;$('amp').oninput=ap;
+$('pp').onclick=e=>{run=!run;e.target.textContent=run?'Pause':'Play'};
+$('rs').onclick=()=>{init();ap()};
+init();spd();setView(FV[0]);ap();requestAnimationFrame(frame);
+</script>
+<article id="paper">
+<h2>Motion Without Laws: A Landscape of Moving Deformations</h2>
+<p class="by">Companion paper to the simulation above</p>
+
+<h3>Abstract</h3>
+<p>The simulation above moves the Sun, nine planets, twelve asteroids, two comets and six outside structures (the Milky Way's center, Andromeda, the Local Group and the supergroup) with no force law, no pair terms and no tidal term in its code. Every object does one thing to the world: it deforms the coordinates around it. Every object knows one thing about the world: its own coordinates and the slope of the landscape at those coordinates. Elliptical orbits, equal areas, the period and distance relation, the Earth and Mars catch-up and the Sun's drift through the galaxy all appear as properties of that landscape. This paper states what the program does differently, what creates the slope, how the familiar results arise from it, and what the program takes as given.</p>
+
+<h3>1. What is different</h3>
+<ul>
+<li><b>Objects know only coordinates and slope.</b> An object does not know that other objects exist. It asks the landscape what the slope is where it sits.</li>
+<li><b>One landscape holds everything.</b> The combined geometry exists in one place. No object assembles it from the others.</li>
+<li><b>Nothing relates two objects.</b> There is no pair loop, no term between a planet and the Sun, no term between the Sun and the Milky Way.</li>
+<li><b>Everything moves.</b> The Sun, planets, asteroids, comets and the outside structures are entries in the same list. Each one reads the slope at its own coordinates and each one deforms the landscape for the rest.</li>
+<li><b>Nothing is split.</b> The slope is not divided into a common part and a variation. Coordinates are measured from the Sun, so each object's change is reported against the Sun's own reading. The Sun's reading is what carries it through the galactic frame.</li>
+<li><b>No arrows.</b> An object receives one slope number per axis and changes its speed along that axis by that number.</li>
+</ul>
+
+<h3>2. What creates the gradient</h3>
+<p><b>Deformation.</b> An object is described by two numbers. Its <i>depth</i> says how much it deforms the coordinates around it. In the program's units the Sun's depth is 4π², a planet's depth is the Sun's times the planet's mass in solar masses, and each outside structure's depth comes from astronomical estimates of its size. Its <i>profile</i> says how the deformation fades with distance. Compact objects dip as minus depth divided by distance. The Milky Way's extended deformation rises as depth times the logarithm of distance, which is the profile that gives a flat rotation speed.</p>
+<p><b>Height.</b> At any coordinate the landscape's height is the sum of the heights of every other object's deformation at that coordinate. An object does not read the dimple it sits in.</p>
+<p><b>Slope.</b> The slope along an axis is how fast the height changes per unit distance along that axis. Because heights add, slopes add. Far from everything the landscape is almost flat. Near a deep dimple it is steep. Between two dimples there are places where the slopes cancel.</p>
+<p>The gradient is therefore not a separate ingredient. It is the shape of the sum, read at a coordinate. Moving any deformation reshapes the whole landscape, so the hill moves under every object at once.</p>
+
+<h3>3. The one rule</h3>
+<div class="rule">Each step, an object's speed along each axis changes at the rate the height falls along that axis at the object's coordinates. Then it moves at its new speed.</div>
+<p>The program applies this with a step of 0.0005 years. The object's own depth never enters the rule. A comet with a depth of 1e-16 of the Sun's changes speed exactly as a planet would at the same coordinates, because the slope is a property of the place.</p>
+
+<h3>4. How the familiar results arise</h3>
+<div class="tw"><table>
+<tr><th>Textbook statement</th><th>Where it comes from here</th></tr>
+<tr><td>Orbits are ellipses.</td><td>An object with sideways speed near a deep dimple is bent into a closed loop by the slope. In the run, Earth stays between 0.983 and 1.017 AU, the range its starting shape implies.</td></tr>
+<tr><td>Equal areas in equal times.</td><td>Near a single dominant dimple the downhill direction points at its center, so the slope never changes the sideways motion. The area swept per unit time stays constant.</td></tr>
+<tr><td>Period squared grows as distance cubed.</td><td>Compact profiles make the slope fall as distance squared. A loop of radius r needs a slope equal to speed squared over r, so speed squared is depth over r, and the period squared grows as r cubed. A different profile would give a different relation. The observed one selects this profile.</td></tr>
+<tr><td>All bodies fall alike.</td><td>An object's own depth does not enter its speed change. The slope belongs to the coordinates.</td></tr>
+<tr><td>Momentum is conserved.</td><td>Each object's effect on the others scales with its depth, so the depth-weighted total of speeds along each axis cannot change for objects that only read each other. With the outside depth set to zero, the system's depth-weighted center moved in a straight line to within 3e-9 AU over 50 years.</td></tr>
+<tr><td>Speed rises falling inward, drops climbing out.</td><td>On a fixed landscape, half the squared speed plus the height at the object's coordinates stays constant. Sliding down raises speed by exactly the height lost.</td></tr>
+<tr><td>Earth catches Mars every 2.14 years.</td><td>Earth and Mars sit at different distances on the same dimple, so they read different slopes and loop at different rates. The catch-up is the beat between the two rates, 1 over (1 over 1.00 minus 1 over 1.88) years.</td></tr>
+<tr><td>The outer system and comets are most disturbed by distant structures.</td><td>The outside landscape is almost flat across the inner planets and changes more across larger distances. The readout's "differs by" column shows it: about 1e-14 AU per year squared across 30 AU from the Milky Way's center, about 1e-11 across 10,000 AU.</td></tr>
+<tr><td>The solar system moves through the galaxy.</td><td>The Sun reads the total outside slope at its coordinates. After 300 years at depth ×1 its path has bent 0.063 AU off a straight line, which is half the Sun's reading times the time squared.</td></tr>
+</table></div>
+
+<h3>5. Why no tides and no arrows</h3>
+<p>The textbook describes the effect of a distant structure on a system as a tidal term, the difference between its pull at two points. Here each object reads the landscape at its own coordinates, so the difference between two objects' readings is just two readings at two coordinates. Nothing has to be named or assembled. The outside depth slider shows it: at ×1e9 the outside structures shift Neptune by about 0.03 AU in 50 years, and the inner planets barely move, because the readings differ more across the outer system.</p>
+<p>The common slope is not removed as a separate quantity, because the landscape has no separate common part. Choosing the Sun as the origin only fixes what the coordinates are measured from. Everything the Sun reads at its own coordinates is its motion through the galactic frame, and the program tracks it.</p>
+
+<h3>6. What the program takes as given</h3>
+<ul>
+<li><b>Depth and profile.</b> Both are set by hand so the landscape reproduces observed orbits and structure sizes. The paper does not derive them.</li>
+<li><b>The rule for combining.</b> Heights add. A nonlinear combination would change every result above, and is the natural place for departures from these results.</li>
+<li><b>Starting coordinates and speeds.</b> The planets and the Moon start from their J2000 orbital elements, with their tilts. The other major moons start in their planets' equatorial planes with random phases, and Triton starts retrograde. The asteroids use real tilts with random phases, and the comets start at random orientations. The outside structures are placed from their galactic coordinates and start at rest in the galactic frame, except Andromeda, which closes at 110 km/s. The Sun starts at 242 km/s.</li>
+<li><b>What is not modeled.</b> The objects' own sizes and any limit on speed.</li>
+</ul>
+
+<h3>7. Checks run on this code</h3>
+<ul>
+<li>Earth's distance stayed between 0.983 and 1.017 AU over 300 years.</li>
+<li>With outside depth ×0, the system's depth-weighted center moved straight to within 3e-9 AU over 50 years.</li>
+<li>At ×1, its path bent 0.063 AU in 300 years, matching half the reading times the time squared.</li>
+<li>At ×1e9, Neptune's position shifted by about 0.03 AU in 50 years.</li>
+<li>Mercury's perihelion advanced 519 arcseconds per century at the page's own step. The other planets account for about 532 of the observed 574, and the remaining 43 is the part the plain sum does not give. Without the small extra steps that Mercury, Venus, Earth and Mars now take, the same code gave minus 25,700, an error from the step and not from the landscape.</li>
+<li>Twenty of the twenty-one moons, Phobos and Deimos included, kept their real orbital periods to within 0.25%, and the Moon to within about 1%, which is the size of the Sun's own effect on it. Triton orbits retrograde, and Charon, Titan and Oberon orbit in their planets' equatorial planes.</li>
+</ul>
+<h3>8. Using the simulation</h3>
+<p>Turn the four outside groups on and off and watch the readout change. Raise the outside depth slider until the outer system feels it. Zoom out to 10,000 AU to follow the comets. Turn on the downhill directions to see where each outside group's slope points at the Sun. The "View from" menu only changes the point of view: it subtracts the chosen planet's coordinates when drawing, and nothing in the landscape knows about it. Trails are kept when you change it: each trail point remembers where the planets were at that moment, so the path is redrawn from the new viewpoint. The trail of the body you view from is its own past positions seen from where it is now, so it shows the path that body has taken through the solar system. Every trail is joined to its body's current position and fades with age, and the Trail slider sets how much of an orbit each one keeps. Choose Mars, Jupiter, Saturn, Uranus, Neptune or Pluto to watch their moons, and switch on the edge-on view to see the tilts. The Speed slider runs down to 0.001 years per second, slow enough to watch Phobos go around Mars.</p>
+<h3>9. References</h3>
+<p>Each entry gives what the source says, what this page says, and how the two differ.</p>
+<p class="grp">Where motion comes from</p>
+<div class="ref"><p class="cite">Newton, I. (1687). <i>Philosophiae Naturalis Principia Mathematica</i>.</p><p><b>It says.</b> A body keeps moving in a straight line at constant speed unless a force acts on it, and bodies attract each other with a force that falls as the square of their distance. <b>This page says.</b> A body changes speed only by the slope of the landscape at its coordinates. A straight path is what a path looks like where the slope is below resolution. <b>How they differ.</b> For a plain sum of dimples the numbers agree. What is primitive differs. There it is a force between pairs and a straight line as the default. Here it is a slope at a coordinate and no default.</p></div>
+<div class="ref"><p class="cite">Einstein, A. (1915). Erklärung der Perihelbewegung des Merkur aus der allgemeinen Relativitätstheorie. <i>Sitzungsberichte der Königlich Preußischen Akademie der Wissenschaften</i>, 831–839.</p><p><b>It says.</b> Mass curves spacetime, free bodies follow the straightest paths in it, and the curvature adds about 43 arcseconds per century to Mercury's perihelion advance. <b>This page says.</b> The plain sum gives 519 of Mercury's observed 574 arcseconds per century at the page's step. The remaining 43 is the part the sum does not give. <b>How they differ.</b> Relativity keeps the straight path as the baseline and bends the space it is measured in. This page keeps no baseline. It does not reproduce the 43, which is the place where the shape of the landscape would have to do the work.</p></div>
+<div class="ref"><p class="cite">Cartan, É. (1923, 1924). Sur les variétés à connexion affine et la théorie de la relativité généralisée. <i>Annales scientifiques de l'École Normale Supérieure</i>, 40, 325–412; 41, 1–25.</p><p><b>It says.</b> Newtonian gravity can be written as geometry with no gravitational force, so free fall becomes the straightest path through a curved connection. <b>This page says.</b> Free fall is a slide down a slope, and nothing is curved to make a line straight. <b>How they differ.</b> Cartan removes the force and keeps the straight line as the geodesic baseline, the same step Einstein takes. This page removes both.</p></div>
+<div class="ref"><p class="cite">Mach, E. (1883). <i>Die Mechanik in ihrer Entwicklung</i>. Brockhaus. Barbour, J. B. &amp; Bertotti, B. (1982). Mach's principle and the structure of dynamical theories. <i>Proceedings of the Royal Society A</i>, 382, 295–306.</p><p><b>It says.</b> Mach argued that a body's inertia should be understood through its relation to all other matter. Barbour and Bertotti built a dynamics from relations among bodies alone, with no absolute space or time. <b>This page says.</b> Every object, including the outside structures, sits in one landscape and reads only its own coordinates. <b>How they differ.</b> They remove absolute positions and keep relations between bodies. This page removes the relations between bodies and keeps coordinates. It also uses a fixed galactic frame to place the outside structures, so it is less relational than they are.</p></div>
+<div class="ref"><p class="cite">Milgrom, M. (1983). A modification of the Newtonian dynamics as a possible alternative to the hidden mass hypothesis. <i>Astrophysical Journal</i>, 270, 365–370. Bekenstein, J. &amp; Milgrom, M. (1984). Does the missing mass problem signal the breakdown of Newtonian gravity? <i>Astrophysical Journal</i>, 286, 7–14.</p><p><b>It says.</b> Flat galaxy rotation curves follow if the slope of the potential departs from the Newtonian one below a small acceleration. The second paper makes the field equation nonlinear in the potential's gradient. <b>This page says.</b> Heights add in a plain sum. Section 6 names a nonlinear combination of heights as the natural place for departures. <b>How they differ.</b> They change the law that links matter to the potential. This page has not. The Milky Way's flat-rotation profile is an input chosen by hand, and the nonlinear overlap is untried here.</p></div>
+<p class="grp">Results that appear</p>
+<div class="ref"><p class="cite">Kepler, J. (1609). <i>Astronomia Nova</i>. Kepler, J. (1619). <i>Harmonices Mundi</i>.</p><p><b>It says.</b> Planets move on ellipses, sweep equal areas in equal times, and have periods whose squares grow as the cubes of their distances. <b>This page says.</b> These come from sliding on a compact dimple whose slope falls as distance squared. <b>How they differ.</b> Kepler describes the pattern. Here the third law selects the profile, and the profile is still an input that this page does not derive.</p></div>
+<div class="ref"><p class="cite">Noether, E. (1918). Invariante Variationsprobleme. <i>Nachrichten von der Gesellschaft der Wissenschaften zu Göttingen</i>, 235–257.</p><p><b>It says.</b> Every continuous symmetry of the action brings a conserved quantity, and translation symmetry brings momentum. <b>This page says.</b> The depth-weighted total of speeds along each axis stays fixed for objects that only read each other. With the outside depth at zero the system's center moved straight to 3e-9 AU in 50 years. <b>How they differ.</b> Her result follows from a symmetry of the action. This one follows from the structure of the sum. It holds only while the sum keeps that structure, so it would fail under a nonlinear combination.</p></div>
+<div class="ref"><p class="cite">Einstein, A. (1907). Über das Relativitätsprinzip und die aus demselben gezogenen Folgerungen. <i>Jahrbuch der Radioaktivität und Elektronik</i>, 4, 411–462. Touboul, P. et al. (2017). MICROSCOPE mission: first results of a space test of the equivalence principle. <i>Physical Review Letters</i>, 119, 231101.</p><p><b>It says.</b> All bodies fall alike. The space test compared titanium and platinum and found no difference at about one part in 10<sup>14</sup>. <b>This page says.</b> An object's own depth never enters its own motion, so every object changes speed identically at the same coordinates. <b>How they differ.</b> In relativity this is a principle built into the geometry. Here it follows from the one rule and is exact by construction, so a measured violation would contradict the rule as written.</p></div>
+<div class="ref"><p class="cite">Heisler, J. &amp; Tremaine, S. (1986). The influence of the galactic tidal field on the Oort comet cloud. <i>Icarus</i>, 65, 13–26.</p><p><b>It says.</b> The galaxy disturbs distant comets through the difference between its pull at the comet and its pull at the Sun, a tidal term. <b>This page says.</b> Each object reads the slope at its own coordinates, and the difference between two readings is just two readings. The readout's "differs by" column shows about 1e-11 AU per year squared across 10,000 AU. <b>How they differ.</b> The size is the same. The standard treatment expands the galactic potential around the Sun and adds a tidal term. Here the full outside slope is read at each coordinate and nothing is named or expanded.</p></div>
+<p class="grp">Stepping</p>
+<div class="ref"><p class="cite">Verlet, L. (1967). Computer experiments on classical fluids. I. Thermodynamical properties of Lennard-Jones molecules. <i>Physical Review</i>, 159, 98–103.</p><p><b>It says.</b> Positions and velocities can be advanced in short steps by symmetric half-kicks around a drift, the method now called Verlet or leapfrog. <b>This page says.</b> Every step is half a speed change, a drift, then half a speed change, using the slope read at the new coordinates. <b>How they differ.</b> The arithmetic is the same. The input differs: the slope comes from the landscape, not from a sum of forces between pairs.</p></div>
+<div class="ref"><p class="cite">Hairer, E., Lubich, C. &amp; Wanner, G. (2006). <i>Geometric Numerical Integration</i> (2nd ed.). Springer.</p><p><b>It says.</b> A symplectic step such as leapfrog solves a slightly different Hamiltonian exactly. For an eccentric Kepler orbit, that difference appears as a steady drift of the perihelion that grows with the square of the step. <b>This page says.</b> We measured it. At the page's old step Mercury's perihelion moved minus 25,700 arcseconds per century, about 1,030 at a fifth of the step and about 40 at a twenty-fifth. <b>How they differ.</b> They give the form of the error. This page removed it by giving the inner planets small steps of their own, not by changing method. Mercury now advances 519.</p></div>
+<div class="ref"><p class="cite">Wisdom, J. &amp; Holman, M. (1991). Symplectic maps for the N-body problem. <i>Astronomical Journal</i>, 102, 1528–1538.</p><p><b>It says.</b> Solve each planet's Kepler orbit exactly and apply the interactions between planets as small kicks, which allows large steps with accurate perihelia. <b>This page says.</b> There is no Kepler solution anywhere. One reading of the landscape is the only computation, so Mercury needs 64 small steps inside each large one. <b>How they differ.</b> Their method is much cheaper for planets. This page pays for having a single rule and no separate pieces.</p></div>
+<div class="ref"><p class="cite">Tuckerman, M., Berne, B. J. &amp; Martyna, G. J. (1992). Reversible multiple time scale molecular dynamics. <i>Journal of Chemical Physics</i>, 97, 1990–2001.</p><p><b>It says.</b> Split the interactions into fast and slow parts and integrate the fast part with small steps and the slow part with large ones, in a way that stays reversible. <b>This page says.</b> The moons and inner planets take small steps inside each large one, and every other object is placed on its start-of-step path for their readings. <b>How they differ.</b> They split the interactions. This page splits the objects and extrapolates. It is not exactly reversible, and the errors are measured instead: Phobos's orbit size holds to 0.02%.</p></div>
+<p class="grp">Data the simulation starts from</p>
+<div class="ref"><p class="cite">Standish, E. M. Keplerian elements for approximate positions of the major planets. NASA/JPL Solar System Dynamics, Table 1 (valid 1800–2050).</p><p><b>It says.</b> Best-fit orbital elements that place the planets to within a small fraction of a degree over 1800 to 2050. <b>This page says.</b> The planets start from these J2000 elements, with their tilts. <b>How they differ.</b> They are fits, not the exact state at one moment. The Pluto and Neptune test over 20,000 years gave a closest approach of 4.4 AU, tilted or flat, against about 17 AU in reality. The elements are the first suspect, and that is untested.</p></div>
+<div class="ref"><p class="cite">Archinal, B. A. et al. (2011). Report of the IAU Working Group on cartographic coordinates and rotational elements: 2009. <i>Celestial Mechanics and Dynamical Astronomy</i>, 109, 101–135.</p><p><b>It says.</b> The directions of the planets' poles. <b>This page says.</b> The moons start in their planet's equatorial plane, with Triton retrograde. <b>How they differ.</b> The report gives no phases, so the moons' starting phases are random.</p></div>
+<div class="ref"><p class="cite">Meeus, J. (1998). <i>Astronomical Algorithms</i> (2nd ed.). Willmann-Bell. NASA/JPL Solar System Dynamics, planetary satellite mean elements.</p><p><b>It says.</b> Mean orbital elements for the Moon and for the major satellites. <b>This page says.</b> The Moon starts from its J2000 elements. The other moons use the size, eccentricity and tilt of their orbits. Twenty of 21 keep their periods within 0.25%. <b>How they differ.</b> These are mean elements. The Moon's period came out within about 1% over 0.6 years, about the size of the Sun's own effect on it.</p></div>
+<div class="ref"><p class="cite">Schönrich, R., Binney, J. &amp; Dehnen, W. (2010). Local kinematics and the local standard of rest. <i>Monthly Notices of the Royal Astronomical Society</i>, 403, 1829–1833. Bland-Hawthorn, J. &amp; Gerhard, O. (2016). The Galaxy in context. <i>Annual Review of Astronomy and Astrophysics</i>, 54, 529–596.</p><p><b>It says.</b> The Sun moves at 11.1, 12.24 and 7.25 km/s relative to its neighbors, about 8.2 kpc from the galactic center. Estimates of the circular speed run from roughly 220 to 240 km/s. <b>This page says.</b> The Sun starts at 242 km/s with that motion, and the Milky Way is an extended deformation with a flat 230 km/s profile. <b>How they differ.</b> They model the galactic potential in detail. This page uses one profile centered at one distance.</p></div>
+<div class="ref"><p class="cite">van der Marel, R. P. et al. (2012). The M31 velocity vector. II. Radial orbit toward the Milky Way and implied Local Group mass. <i>Astrophysical Journal</i>, 753, 8.</p><p><b>It says.</b> Andromeda is approaching the Milky Way at about 110 km/s. <b>This page says.</b> Andromeda starts at 110 km/s toward the Milky Way. The mass of 1.5e12 solar masses is an estimate. <b>How they differ.</b> They fit a full orbit. The other outside structures here start at rest in the galactic frame, which is a simplification.</p></div>
+<div class="ref"><p class="cite">Tully, R. B. et al. (2014). The Laniakea supercluster of galaxies. <i>Nature</i>, 513, 71–73.</p><p><b>It says.</b> The Local Group lies in a basin of flows that converge on the Great Attractor region. <b>This page says.</b> Virgo and the Great Attractor are two outside deformations, with rough depths. <b>How they differ.</b> Real flows move, and these start at rest. At depth ×1 their effect is below resolution either way.</p></div>
+</article>
+</body></html>
