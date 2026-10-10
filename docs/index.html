@@ -54,8 +54,8 @@ const MOONS=[['Earth','Moon',3.694e-8,384400,.0549,5.145],['Jupiter','Io',4.492e
 ['Uranus','Miranda',3.22e-11,129900,.0013,4.34],['Uranus','Ariel',6.29e-10,190900,.0012,.04],['Uranus','Umbriel',6.41e-10,266000,.0039,.13],['Uranus','Titania',1.71e-9,436300,.0011,.08],['Uranus','Oberon',1.547e-9,583500,.0014,.07],
 ['Mars','Phobos',5.36e-15,9376,.0151,1.08],['Mars','Deimos',7.42e-16,23463,.00033,1.79],['Neptune','Triton',1.076e-8,354760,.00002,156.865],['Pluto','Charon',7.98e-10,19596,.0002,0]];
 const POLE={Mars:[317.681,52.887],Jupiter:[268.057,64.495],Saturn:[40.589,83.537],Uranus:[257.311,-15.175],Neptune:[299.36,43.46],Pluto:[132.993,-6.163]};
-const DT0=5e-4,KM=1.495978707e8,FN=['Sun','Mercury','Venus','Earth','Mars','Jupiter','Saturn','Uranus','Neptune','Pluto'],FV=[60,1.2,2,.004,.0002,.015,.026,.0045,.003,.00016];
-let N,NL,x,y,z,vx,vy,vz,ax,ay,az,depth,shape,grp,nm,px,col,kind,tr,iv,tl,WX,WY,WZ,WVx,WVy,WVz,MT,B0=[0,0,0],amp=1,moons=true,edge=false,tf=1,dt=5e-4,CAP=16,fi=0,MI=[],host,lvl,ivt,nxt,Sx,Sy,Sz,Svx,Svy,Svz,Sax,Say,Saz,rate=.5,view=60,run=true,steps=0,yrs=0,acc_=0,last=0,fr=0,sd=7;
+const DT0=1.25e-4,KM=1.495978707e8,FN=['Sun','Mercury','Venus','Earth','Mars','Jupiter','Saturn','Uranus','Neptune','Pluto'],FV=[60,1.2,2,.004,.0002,.015,.026,.0045,.003,.00016];
+let N,NL,x,y,z,vx,vy,vz,ax,ay,az,depth,shape,grp,nm,px,col,kind,tr,iv,tl,WX,WY,WZ,WVx,WVy,WVz,MT,B0=[0,0,0],amp=1,moons=true,edge=false,tf=1,dt=1.25e-4,CAP=32,fi=0,MI=[],host,lvl,ivt,nxt,Sx,Sy,Sz,Svx,Svy,Svz,Sax,Say,Saz,rate=.5,view=60,run=true,steps=0,yrs=0,acc_=0,last=0,fr=0,sd=7;
 const o=[0,0,0],sr=[0,0,0],rnd=()=>(sd=(sd*1664525+1013904223)>>>0)/4294967296;
 // the landscape: the only place the combined geometry exists. Objects ask it which way is downhill at a coordinate.
 const land={downhill(qx,qy,qz,skip,out,only){let sx=0,sy=0,sz=0;
@@ -72,7 +72,7 @@ return{x:a11*X+a12*Y,y:a21*X+a22*Y,z:a31*X+a32*Y,vx:a11*U+a12*V,vy:a21*U+a22*V,v
 function nuFromM(M,e){M=((M%TAU)+TAU)%TAU;let E=M+e*Math.sin(M);for(let k=0;k<30;k++)E-=(E-e*Math.sin(E)-M)/(1-e*Math.cos(E));return 2*Math.atan2(Math.sqrt(1+e)*Math.sin(E/2),Math.sqrt(1-e)*Math.cos(E/2))}
 // a host planet's equator frame in ecliptic coordinates (node direction, third axis, pole)
 function poleFrame(ra,dec){ra*=R;dec*=R;const p=[Math.cos(dec)*Math.cos(ra),Math.cos(dec)*Math.sin(ra),Math.sin(dec)],xh=[-Math.sin(ra),Math.cos(ra),0],yh=[p[1]*xh[2]-p[2]*xh[1],p[2]*xh[0]-p[0]*xh[2],p[0]*xh[1]-p[1]*xh[0]],ec=v=>[v[0],v[1]*ce+v[2]*se,-v[1]*se+v[2]*ce];return[ec(xh),ec(yh),ec(p)]}
-function init(){sd=7;dt=DT0;CAP=moons?16:400;
+function init(){sd=7;dt=DT0;CAP=moons?32:800;
 const B=[{n:'Sun',dep:SUN_DEPTH,x:0,y:0,z:0,vx:0,vy:0,vz:0,p:7,c:'#f5b700',k:0,a:0}],MB=[],mm={};
 if(moons)MOONS.forEach(m=>(mm[m[0]]=mm[m[0]]||[]).push(m));
 for(const[n,m,a,e,I,L,wb,Om,p,c]of PL){const ms=mm[n]||[],Mt=m+ms.reduce((q,k)=>q+k[2],0),h={n,dep:SUN_DEPTH*m,...kep(a,e,I,Om,wb-Om,nuFromM((L-wb)*R,e),SUN_DEPTH*(1+Mt)),p,c,k:1,a,e},hi=B.length,fr=POLE[n]?poleFrame(...POLE[n]):null;B.push(h);
@@ -81,7 +81,7 @@ if(n==='Earth')st=kep(aa,k[4],k[5],125.0445,318.3085,nuFromM(134.9634*R,k[4]),mu
 else{const s0=kep(aa,k[4],k[5],0,rnd()*360,nuFromM(rnd()*TAU,k[4]),mu);st={};['x','y','z'].forEach((q,j)=>st[q]=s0.x*fr[0][j]+s0.y*fr[1][j]+s0.z*fr[2][j]);['vx','vy','vz'].forEach((q,j)=>st[q]=s0.vx*fr[0][j]+s0.vy*fr[1][j]+s0.vz*fr[2][j])}
 return{k,st,aa,mu}});
 for(const q of['x','y','z','vx','vy','vz'])h[q]-=rel.reduce((t,r)=>t+r.st[q]*r.k[2]/Mt,0);
-for(const r of rel){const T=TAU*Math.sqrt(r.aa**3/r.mu);let lv=1;while(lv<64&&lv<160*dt/T)lv*=2;
+for(const r of rel){const T=TAU*Math.sqrt(r.aa**3/r.mu);let lv=1;while(lv<128&&lv<320*dt/T)lv*=2;
 MB.push({n:r.k[1],dep:SUN_DEPTH*r.k[2],x:h.x+r.st.x,y:h.y+r.st.y,z:h.z+r.st.z,vx:h.vx+r.st.vx,vy:h.vy+r.st.vy,vz:h.vz+r.st.vz,p:1.5,c:'#cfd4dc',k:5,a:r.aa,host:hi,lv:lv,T})}}
 B.push(...MB);
 for(const[n,m,a,e,I]of AS)B.push({n,dep:SUN_DEPTH*m,...kep(a,e,I,rnd()*360,rnd()*360,nuFromM(rnd()*TAU,e),SUN_DEPTH),p:1.5,c:'#888',k:2,a});
@@ -95,14 +95,16 @@ shape=[];grp=[];nm=[];px=[];col=[];kind=[];iv=[];tl=[];tr=[];host=[];lvl=[];ivt=
 B.forEach((b,i)=>{nm[i]=b.n;depth[i]=b.dep;x[i]=b.x;y[i]=b.y;z[i]=b.z;vx[i]=b.vx;vy[i]=b.vy;vz[i]=b.vz;shape[i]=b.sh||0;grp[i]=b.k==4?b.g:-1;px[i]=b.p;col[i]=b.c;kind[i]=b.k;
 host[i]=b.k==5?b.host:-1;lvl[i]=b.lv||1;nxt[i]=0;if(b.k==5)MI.push(i);
 if(b.k==1&&b.e!==undefined){const T=Math.pow(b.a,1.5),need=Math.max(4000,24000*Math.sqrt(b.e/.2056));let lv=1;while(lv<128&&lv<need*DT0/T)lv*=2;if(lv>1){host[i]=0;lvl[i]=lv;MI.push(i)}}
-ivt[i]=b.k==5?b.T/100:(b.k==3?Math.round(.02/DT0):Math.max(1,Math.round(Math.pow(b.a||1,1.5)/300/DT0)))*DT0;tl[i]=b.k==3?800:b.k==5?165:480;tr[i]=[]});ivt[0]=40*DT0;tl[0]=6000;
+ivt[i]=b.k==5?b.T/100:(b.k==3?Math.round(.02/DT0):Math.max(1,Math.round(Math.pow(b.a||1,1.5)/300/DT0)))*DT0;tl[i]=b.k==3?800:b.k==5?165:480;tr[i]=[]});ivt[0]=160*DT0;tl[0]=6000;
 steps=0;yrs=0;WX=WY=WZ=0;WVx=sv[0];WVy=sv[1];WVz=sv[2];B0=[0,0,0];for(let i=1;i<NL;i++)for(let k=0;k<3;k++)B0[k]+=depth[i]/MT*[x,y,z][k][i];reading()}
 // every object reads the downhill direction at its own coordinates; coordinates are measured from the Sun
 function reading(){land.downhill(0,0,0,0,o,-1);sr[0]=o[0];sr[1]=o[1];sr[2]=o[2];
 for(let i=1;i<N;i++){land.downhill(x[i],y[i],z[i],i,o,-1);ax[i]=o[0]-sr[0];ay[i]=o[1]-sr[1];az[i]=o[2]-sr[2]}}
 // a trail point remembers the body's position and where the nine planets were then, so any viewpoint can redraw it
-function pt(a,b,c,tau){const p=new Float64Array(30);p[0]=a;p[1]=b;p[2]=c;for(let k=1;k<=9;k++){const q=3*k;
-if(tau===undefined){p[q]=x[k];p[q+1]=y[k];p[q+2]=z[k]}else{p[q]=Sx[k]+Svx[k]*tau+.5*Sax[k]*tau*tau;p[q+1]=Sy[k]+Svy[k]*tau+.5*Say[k]*tau*tau;p[q+2]=Sz[k]+Svz[k]*tau+.5*Saz[k]*tau*tau}}return p}
+// the background for trails is the system's depth-weighted center, so the Sun leaves a track around it
+function bary(tau){let a=0,b=0,c=0;for(let j=1;j<NL;j++){const w=depth[j]/MT;if(tau===undefined){a+=w*x[j];b+=w*y[j];c+=w*z[j]}else{const t2=.5*tau*tau;a+=w*(Sx[j]+Svx[j]*tau+Sax[j]*t2);b+=w*(Sy[j]+Svy[j]*tau+Say[j]*t2);c+=w*(Sz[j]+Svz[j]*tau+Saz[j]*t2)}}return[a,b,c]}
+function pt(a,b,c,tau){const p=new Float64Array(33),B=bary(tau);p[0]=a-B[0];p[1]=b-B[1];p[2]=c-B[2];p[30]=-B[0];p[31]=-B[1];p[32]=-B[2];
+for(let k=1;k<=9;k++){const q=3*k;if(tau===undefined){p[q]=x[k]-B[0];p[q+1]=y[k]-B[1];p[q+2]=z[k]-B[2]}else{const t2=.5*tau*tau;p[q]=Sx[k]+Svx[k]*tau+Sax[k]*t2-B[0];p[q+1]=Sy[k]+Svy[k]*tau+Say[k]*t2-B[1];p[q+2]=Sz[k]+Svz[k]*tau+Saz[k]*t2-B[2]}}return p}
 // reading at a coordinate a time tau into the step: every other object is placed on its start-of-step path
 land.downhillX=function(qx,qy,qz,skip,out,tau){let sx=0,sy=0,sz=0;const t2=.5*tau*tau;
 for(let j=0;j<N;j++){if(j===skip)continue;const g=grp[j];if(g>=0&&!on[g])continue;
@@ -135,9 +137,9 @@ document.getElementById('tb').textContent=s}
 const fmtV=v=>v<.01?v.toExponential(1):v<100?v.toPrecision(2):v.toExponential(1);
 function draw(){const c=document.getElementById('c'),g=c.getContext('2d'),W=c.width,sc=W/2/view,cs=getComputedStyle(document.documentElement),fg=cs.getPropertyValue('--fg'),mu=cs.getPropertyValue('--mut'),V=edge?z:y,vi=edge?2:1,f=fi;
 g.clearRect(0,0,W,W);g.font='12px sans-serif';
-const fx=x[f],fy=y[f],fz=z[f],fc=[fx,fy,fz];
+const fx=x[f],fy=y[f],fz=z[f],Bn=bary(),fc=[fx-Bn[0],fy-Bn[1],fz-Bn[2]];
 for(let i=0;i<NL;i++){const T=tr[i],own=i==f,P=[],m=Math.min(T.length,Math.max(2,Math.ceil(T.length*tf)));
-for(let k=T.length-m;k<T.length;k++){const q=T[k];P.push(own?[q[0]-fc[0],q[vi]-fc[vi]]:[q[0]-(f?q[3*f]:0),q[vi]-(f?q[3*f+vi]:0)])}
+for(let k=T.length-m;k<T.length;k++){const q=T[k];P.push(own?[q[0]-fc[0],q[vi]-fc[vi]]:[q[0]-q[f?3*f:30],q[vi]-q[(f?3*f:30)+vi]])}
 P.push(own?[0,0]:[x[i]-fx,vi==1?y[i]-fy:z[i]-fz]);if(P.length<2)continue;
 g.strokeStyle=col[i];const K=6;for(let c=0;c<K;c++){const a=Math.floor(c*(P.length-1)/K),e=Math.max(a+1,Math.floor((c+1)*(P.length-1)/K));
 g.globalAlpha=.07+.6*(c+1)/K;g.beginPath();for(let k=a;k<=e&&k<P.length;k++){const X=W/2+P[k][0]*sc,Y=W/2-P[k][1]*sc;k==a?g.moveTo(X,Y):g.lineTo(X,Y)}g.stroke()}}
@@ -188,7 +190,7 @@ init();spd();setView(FV[0]);ap();requestAnimationFrame(frame);
 
 <h3>3. The one rule</h3>
 <div class="rule">Each step, an object's speed along each axis changes at the rate the height falls along that axis at the object's coordinates. Then it moves at its new speed.</div>
-<p>The program applies this with a step of 0.0005 years. The object's own depth never enters the rule. A comet with a depth of 1e-16 of the Sun's changes speed exactly as a planet would at the same coordinates, because the slope is a property of the place.</p>
+<p>The program applies this with a large step of 0.000125 years, and gives the moons and Mercury smaller steps inside it. The object's own depth never enters the rule. A comet with a depth of 1e-16 of the Sun's changes speed exactly as a planet would at the same coordinates, because the slope is a property of the place.</p>
 
 <h3>4. How the familiar results arise</h3>
 <div class="tw"><table>
@@ -222,11 +224,12 @@ init();spd();setView(FV[0]);ap();requestAnimationFrame(frame);
 <li>With outside depth ×0, the system's depth-weighted center moved straight to within 3e-9 AU over 50 years.</li>
 <li>At ×1, its path bent 0.063 AU in 300 years, matching half the reading times the time squared.</li>
 <li>At ×1e9, Neptune's position shifted by about 0.03 AU in 50 years.</li>
-<li>Mercury's perihelion advanced 519 arcseconds per century at the page's own step. The other planets account for about 532 of the observed 574, and the remaining 43 is the part the plain sum does not give. Without the small extra steps that Mercury, Venus, Earth and Mars now take, the same code gave minus 25,700, an error from the step and not from the landscape.</li>
+<li>Mercury's perihelion advanced 519 arcseconds per century at the page's own step. The other planets account for about 532 of the observed 574, and the remaining 43 is the part the plain sum does not give. Without the smaller steps the inner planets now take, the same code gave minus 25,700, an error from the step and not from the landscape.</li>
+<li>Over 10 years, the four large moons of Jupiter and the seven of Saturn stayed within 0.003 and 0.0005 of the eccentricities of a high-accuracy reference integration, and within 0.03% in orbit size. With the earlier, larger step, Io's eccentricity grew to 0.089 in 20 years while the reference stayed under 0.011.</li>
 <li>Twenty of the twenty-one moons, Phobos and Deimos included, kept their real orbital periods to within 0.25%, and the Moon to within about 1%, which is the size of the Sun's own effect on it. Triton orbits retrograde, and Charon, Titan and Oberon orbit in their planets' equatorial planes.</li>
 </ul>
 <h3>8. Using the simulation</h3>
-<p>Turn the four outside groups on and off and watch the readout change. Raise the outside depth slider until the outer system feels it. Zoom out to 10,000 AU to follow the comets. Turn on the downhill directions to see where each outside group's slope points at the Sun. The "View from" menu only changes the point of view: it subtracts the chosen planet's coordinates when drawing, and nothing in the landscape knows about it. Trails are kept when you change it: each trail point remembers where the planets were at that moment, so the path is redrawn from the new viewpoint. The trail of the body you view from is its own past positions seen from where it is now, so it shows the path that body has taken through the solar system. Every trail is joined to its body's current position and fades with age, and the Trail slider sets how much of an orbit each one keeps. Choose Mars, Jupiter, Saturn, Uranus, Neptune or Pluto to watch their moons, and switch on the edge-on view to see the tilts. The Speed slider runs down to 0.001 years per second, slow enough to watch Phobos go around Mars.</p>
+<p>Turn the four outside groups on and off and watch the readout change. Raise the outside depth slider until the outer system feels it. Zoom out to 10,000 AU to follow the comets. Turn on the downhill directions to see where each outside group's slope points at the Sun. The "View from" menu only changes the point of view: it subtracts the chosen planet's coordinates when drawing, and nothing in the landscape knows about it. Trails are kept when you change it: each trail point remembers where the planets were at that moment, so the path is redrawn from the new viewpoint. The trail of the body you view from is its own past positions seen from where it is now, so it shows the path that body has taken through the solar system. Every trail is joined to its body's current position and fades with age, and the Trail slider sets how much of an orbit each one keeps. In the Sun's own frame the Sun leaves a track too: trails are kept around the system's depth-weighted center, so the Sun traces the wobble Jupiter and Saturn cause, about 0.01 AU across, which shows at a view radius near 0.02 AU. Choose Mars, Jupiter, Saturn, Uranus, Neptune or Pluto to watch their moons, and switch on the edge-on view to see the tilts. The Speed slider runs down to 0.001 years per second, slow enough to watch Phobos go around Mars.</p>
 <h3>9. References</h3>
 <p>Each entry gives what the source says, what this page says, and how the two differ.</p>
 <p class="grp">Where motion comes from</p>
